@@ -13,12 +13,6 @@ from pathlib import Path
 from typing import List, Dict, Tuple
 from collections import defaultdict
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(message)s'
-)
-
 class GlobexToChromaRenamer:
     def __init__(self, root_path: str = ".", dry_run: bool = False):
         self.root_path = Path(root_path).resolve()
@@ -192,11 +186,24 @@ def bulk_rename(root_path: str, dry_run: bool = False) -> None:
     Convenience function for bulk renaming operations.
     This function is used by tests for compatibility.
     """
+    # Configure logging if not already configured
+    if not logging.getLogger().hasHandlers():
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(message)s'
+        )
+    
     renamer = GlobexToChromaRenamer(root_path, dry_run=dry_run)
     renamer.run()
 
 def main():
     import argparse
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(message)s'
+    )
     
     parser = argparse.ArgumentParser(
         description="Recursively rename files and symbols from 'globex_' to 'chroma_'"
