@@ -8,9 +8,16 @@ Provides a summary table of changes made
 import os
 import re
 import shutil
+import logging
 from pathlib import Path
 from typing import List, Dict, Tuple
 from collections import defaultdict
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s'
+)
 
 class GlobexToChromaRenamer:
     def __init__(self, root_path: str = ".", dry_run: bool = False):
@@ -18,6 +25,7 @@ class GlobexToChromaRenamer:
         self.dry_run = dry_run
         self.skip_dirs = {'.git', 'node_modules', '__pycache__', '.pytest_cache', 'node_modules'}
         self.skip_extensions = {'.pyc', '.pyo', '.pyd', '__pycache__'}
+        self.logger = logging.getLogger(__name__)
         
         # Track changes for summary
         self.file_renames = []  # (old_path, new_path)
@@ -47,16 +55,16 @@ class GlobexToChromaRenamer:
             
             if self.dry_run:
                 self.file_renames.append((str(file_path), str(new_path)))
-                print(f"[DRY RUN] Would rename file: {file_path} -> {new_path}")
+                self.logger.info(f"[DRY RUN] Would rename file: {file_path} -> {new_path}")
                 return file_path
             
             try:
                 file_path.rename(new_path)
                 self.file_renames.append((str(file_path), str(new_path)))
-                print(f"Renamed file: {file_path} -> {new_path}")
+                self.logger.info(f"Renamed file: {file_path} -> {new_path}")
                 return new_path
             except Exception as e:
-                print(f"Error renaming file {file_path}: {e}")
+                self.logger.error(f"Error renaming file {file_path}: {e}")
                 return file_path
         return file_path
 
@@ -69,7 +77,7 @@ class GlobexToChromaRenamer:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
         except Exception as e:
-            print(f"Error reading file {file_path}: {e}")
+            self.logger.error(f"Error reading file {file_path}: {e}")
             return
 
         # Pattern to match globex_ symbols (identifiers)
@@ -92,7 +100,7 @@ class GlobexToChromaRenamer:
             self.symbol_changes[str(file_path)] = changes_made
             
             if self.dry_run:
-                print(f"[DRY RUN] Would update symbols in: {file_path} ({len(changes_made)} changes)")
+                self.logger.info(f"[DRY RUN] Would update symbols in: {file_path} ({len(changes_made)} changes)")
                 return
             
             # Replace all occurrences
@@ -101,9 +109,9 @@ class GlobexToChromaRenamer:
             try:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(new_content)
-                print(f"Updated symbols in: {file_path} ({len(changes_made)} changes)")
+                self.logger.info(f"Updated symbols in: {file_path} ({len(changes_made)} changes)")
             except Exception as e:
-                print(f"Error writing file {file_path}: {e}")
+                self.logger.error(f"Error writing file {file_path}: {e}")
 
     def process_directory(self, directory: Path) -> None:
         """Recursively process directory"""
@@ -125,59 +133,67 @@ class GlobexToChromaRenamer:
                     self.process_directory(item)
                     
         except PermissionError:
-            print(f"Permission denied: {directory}")
+            self.logger.warning(f"Permission denied: {directory}")
         except Exception as e:
-            print(f"Error processing directory {directory}: {e}")
+            self.logger.error(f"Error processing directory {directory}: {e}")
 
     def print_summary_table(self) -> None:
         """Print a summary table of all changes made"""
-        print("\n" + "="*80)
-        print("SUMMARY OF CHANGES")
-        print("="*80)
+        self.logger.info("\n" + "="*80)
+        self.logger.info("SUMMARY OF CHANGES")
+        self.logger.info("="*80)
         
         # File renames summary
         if self.file_renames:
-            print(f"\n📁 FILE RENAMES ({len(self.file_renames)} files):")
-            print("-" * 60)
+            self.logger.info(f"\n📁 FILE RENAMES ({len(self.file_renames)} files):")
+            self.logger.info("-" * 60)
             for old_path, new_path in self.file_renames:
                 old_name = Path(old_path).name
                 new_name = Path(new_path).name
-                print(f"  {old_name} → {new_name}")
+                self.logger.info(f"  {old_name} → {new_name}")
         else:
-            print("\n📁 FILE RENAMES: None")
+            self.logger.info("\n📁 FILE RENAMES: None")
         
         # Symbol changes summary
         total_symbol_changes = sum(len(changes) for changes in self.symbol_changes.values())
         if total_symbol_changes > 0:
-            print(f"\n🔧 SYMBOL CHANGES ({total_symbol_changes} symbols in {len(self.symbol_changes)} files):")
-            print("-" * 60)
+            self.logger.info(f"\n🔧 SYMBOL CHANGES ({total_symbol_changes} symbols in {len(self.symbol_changes)} files):")
+            self.logger.info("-" * 60)
             
             for file_path, changes in self.symbol_changes.items():
                 rel_path = os.path.relpath(file_path, self.root_path)
-                print(f"\n  📄 {rel_path}:")
+                self.logger.info(f"\n  📄 {rel_path}:")
                 for old_symbol, new_symbol, line_num in changes:
-                    print(f"    Line {line_num:4d}: {old_symbol} → {new_symbol}")
+                    self.logger.info(f"    Line {line_num:4d}: {old_symbol} → {new_symbol}")
         else:
-            print("\n🔧 SYMBOL CHANGES: None")
+            self.logger.info("\n🔧 SYMBOL CHANGES: None")
         
         # Overall summary
-        print(f"\n📊 TOTAL SUMMARY:")
-        print(f"  • Files renamed: {len(self.file_renames)}")
-        print(f"  • Files with symbol changes: {len(self.symbol_changes)}")
-        print(f"  • Total symbol changes: {total_symbol_changes}")
-        print("="*80)
+        self.logger.info(f"\n📊 TOTAL SUMMARY:")
+        self.logger.info(f"  • Files renamed: {len(self.file_renames)}")
+        self.logger.info(f"  • Files with symbol changes: {len(self.symbol_changes)}")
+        self.logger.info(f"  • Total symbol changes: {total_symbol_changes}")
+        self.logger.info("="*80)
 
     def run(self) -> None:
         """Run the renaming process"""
         mode = "[DRY RUN] " if self.dry_run else ""
-        print(f"{mode}Starting globex_ to chroma_ renaming in: {self.root_path}")
-        print(f"Skipping directories: {', '.join(sorted(self.skip_dirs))}")
+        self.logger.info(f"{mode}Starting globex_ to chroma_ renaming in: {self.root_path}")
+        self.logger.info(f"Skipping directories: {', '.join(sorted(self.skip_dirs))}")
         if self.dry_run:
-            print("🔍 DRY RUN MODE - No actual changes will be made")
-        print("-" * 60)
+            self.logger.info("🔍 DRY RUN MODE - No actual changes will be made")
+        self.logger.info("-" * 60)
         
         self.process_directory(self.root_path)
         self.print_summary_table()
+
+def bulk_rename(root_path: str, dry_run: bool = False) -> None:
+    """
+    Convenience function for bulk renaming operations.
+    This function is used by tests for compatibility.
+    """
+    renamer = GlobexToChromaRenamer(root_path, dry_run=dry_run)
+    renamer.run()
 
 def main():
     import argparse
@@ -186,8 +202,7 @@ def main():
         description="Recursively rename files and symbols from 'globex_' to 'chroma_'"
     )
     parser.add_argument(
-        'path',
-        nargs='?',
+        '--path',
         default='.',
         help='Root path to start renaming (default: current directory)'
     )
@@ -196,10 +211,18 @@ def main():
         action='store_true',
         help='Show what would be renamed without making changes'
     )
+    parser.add_argument(
+        '--check',
+        action='store_true',
+        help='Alias for --dry-run: show what would be renamed without making changes'
+    )
     
     args = parser.parse_args()
     
-    renamer = GlobexToChromaRenamer(args.path, dry_run=args.dry_run)
+    # --check is an alias for --dry-run
+    dry_run = args.dry_run or args.check
+    
+    renamer = GlobexToChromaRenamer(args.path, dry_run=dry_run)
     renamer.run()
 
 if __name__ == "__main__":
